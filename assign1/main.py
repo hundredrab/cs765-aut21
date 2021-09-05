@@ -1,11 +1,13 @@
 import logging
-from collections import defaultdict
+import random
+from collections import defaultdict, Counter
 from heapq import heapify, heappop, heappush
 
 import numpy as np
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+random.seed(42)
 np.random.seed(42)
 
 NUM_PEERS = 10
@@ -26,16 +28,21 @@ for i in range(NUM_PEERS):
     for j in range(NUM_PEERS):
         c[i][j] = 5 + (is_fast[i] and is_fast[j]) * 95
 
+
+AVG_MINING_TIME = np.empty(NUM_PEERS)
+for i in range(NUM_PEERS):
+    AVG_MINING_TIME = 500 + is_fast[i] * 500
+
+
 # Create propagation delay matrix p; values in ms
 p = np.random.uniform(10, 500, (NUM_PEERS, NUM_PEERS))
 p = (p + p.T)/2
-print(p.mean(), c.mean(), is_fast)
-exit()
 
 ##
 peers = list(range(NUM_PEERS))
 chains = defaultdict(list)
 seen_transactions = defaultdict(set)
+pool = defaultdict(list)
 
 
 def generate_random_transaction(source):
@@ -75,6 +82,59 @@ class Message:
 
     def __gt__(self, m2):
         return self.source > m2.source
+
+
+class Block:
+    def __init__(self, generator, prev_block, trxs):
+        self.prev = prev_block
+        self.trxs = trxs
+        self.generator = generator
+
+    def block_balance(self):
+        ledger = defaultdict(int)
+        ledger[self.generator] = 50
+        for trx in self.trxs:
+            ledger[trx.payer] -= trx.amt
+            ledger[trx.payee] += trx.amt
+        return Counter(ledger)
+
+    def overall_balance(self):
+        ledger = Counter()
+        node = self
+        while node is not None:
+            ledger.update(node.block_balance())
+            node = node.prev
+        return ledger
+
+    def is_valid(self):
+        """Determines if the current block has valid trxs only.
+
+        The balance of any payer may not go below zero at any point.
+        """
+        ledger = self.prev.overall_balance()
+        for trx in self.trxs:
+            ledger[trx.payer] -= trx.amt
+            if ledger[trx.payer] < 0:
+                return False
+        return True
+
+    def height(self):
+        if self.prev is None:
+            return 0
+        return self.prev.height() + 1
+
+
+##
+# ##### Block testing and debugging ####
+#"""
+genesis = Block(-1, None, list())
+b1 = Block(1, genesis, [Transaction(0, 2, 3, 5), Transaction(1, 3, 2, 10)])
+b2 = Block(1, genesis, [])
+b3 = Block(2, b2, [Transaction(2, 1, 5, 20), Transaction(3, 1, 7, 15)])
+b4 = Block(2, b3, [Transaction(5, 2, 5, 50), Transaction(4, 1, 7, 25)])
+print(b4.is_valid())
+#"""
+##
 
 
 def generate_valid_graph(num=NUM_PEERS):
@@ -120,7 +180,7 @@ graph = generate_valid_graph()
 
 
 def _transact(time, trx: Transaction):
-    """Execute a transaction on the source node.
+    """Initiate a transaction on the source node.
 
     Create events of sending transaction info to itself for simplification."""
     logger.info(f"{time}s: Created transaction: {trx}")
@@ -135,6 +195,7 @@ def _receive(time, message: Message):
     if message.trx.id in seen_transactions[message.dest]:
         return
     seen_transactions[message.dest].add(message.trx.id)
+    pool[message.dest].append(message.trx)
     # TODO: Other blockchain stufff
     for neigh in graph[message.dest]:
         if message.source != neigh:
@@ -142,8 +203,7 @@ def _receive(time, message: Message):
             mc = 8 / cij   # ms
             d = np.random.exponential(96/cij)  # ms
             latency = (p[message.dest][neigh] + mc + d) / 1000  # s
-            print(latency)
-            rec_time = time + latency  # TODO: Simulate latency
+            rec_time = time + latency
             heappush(q, (rec_time, _receive, Message(message.trx, message.dest, neigh)))
 
 
@@ -170,11 +230,35 @@ def populate_transaction_events():
     heapify(q)
 
 
+def populate_init_mining_events():
+    for peer in range(NUM_PEERS):
+        pass
+
+
 def main():
     populate_transaction_events()
+    populate_init_mining_events()
     while q:
         execute(*heappop(q))
 
 
 if __name__ == "__main__":
     main()
+
+
+# Genesis, 0001
+# Genesis, 0002
+# 0001, 0005
+# 0001, 0006
+# Genesis, 0003
+# 0003, 0007
+# 0002, 0008
+# 0005, 0009
+
+
+
+
+# genesis
+# 0001                                00002                                0003
+# 00005   0006                          0008                              0007
+# 0009
