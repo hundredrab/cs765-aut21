@@ -12,6 +12,7 @@ Run `python3 main.py -h` to see the help.
 
 The program needs the following arguments:
 
+```
   -n NUM_PEERS, --num_peers NUM_PEERS
                         Number of peers
   -t NUM_TRANSACTIONS, --num_transactions NUM_TRANSACTIONS
@@ -22,6 +23,7 @@ The program needs the following arguments:
                         Average time to mine
   -z SLOW_PERCENT, --slow_percent SLOW_PERCENT
                         Percent of peers that are slow
+```
 
 For example, to run the simulation, run the following command:
 ```
