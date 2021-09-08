@@ -429,6 +429,11 @@ def main():
             execute(*item)
             #execute(*heappop(q))
             pbar.update(q[0][0]-item[0])
+    for n in range(NUM_PEERS):
+        NODE_FILE = f"{DATA_FOLDER}/{n}.csv"
+        with open(NODE_FILE, 'w') as nodefile:
+            nodefile.write("peer,is_fast,timestamp,hash,number,parent_hash\n")
+            nodefile.writelines(filter(lambda x: x.split(',')[0].strip() == str(n), file_logs))
     with open(LOG_FILE, 'w') as infofile:
         infofile.write("peer,is_fast,timestamp,hash,number,parent_hash\n")
         infofile.writelines(file_logs)
