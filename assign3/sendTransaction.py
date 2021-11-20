@@ -1,71 +1,175 @@
 import sys
 import time
-import pprint
+from pprint import pprint
+import random
+import numpy as np
+from math import ceil
+
 
 from web3 import *
-from solc import compile_source
+from solcx import compile_source, compile_files
 import os
 
 
+random.seed(42)
 
 
 def compile_source_file(file_path):
-   with open(file_path, 'r') as f:
-      source = f.read()
-   return compile_source(source)
+    return compile_files(
+        [file_path],
+        output_values=['bin', 'abi', 'bin-runtime'],
+        solc_version='0.8.10'
+    )
 
 
 
 def sendEmptyLoopTransaction(address):
-       
-    contract_source_path = os.environ['HOME']+'/HW3/emptyLoop.sol'
+    contract_source_path = 'emptyLoop.sol'
     compiled_sol = compile_source_file(contract_source_path)
 
     contract_id, contract_interface = compiled_sol.popitem()
 
     sort_contract = w3.eth.contract(
-    address=address,
-    abi=contract_interface['abi'])
+        address=address,
+        abi=contract_interface['abi']
+    )
+    from pprint import pprint
+    pprint(contract_interface['abi'])
     tx_hash = sort_contract.functions.runLoop().transact({'txType':"0x3", 'from':w3.eth.accounts[0], 'gas':2409638})
     return tx_hash
 
 
 print("Starting Transaction Submission")
-w3 = Web3(IPCProvider(os.environ['HOME']+'/HW3/test-eth1/geth.ipc', timeout=100000))
+w3 = Web3(IPCProvider('/home/sourab/Projects/cs765-aut21/assign3/test-eth1/geth.ipc', timeout=100000))
+
+contract_source_path = 'emptyLoop.sol'
+compiled_sol = compile_source_file(contract_source_path)
+
+contract_id, contract_interface = compiled_sol.popitem()
+
+with open('contractAddressList') as fp:
+    for line in fp:
+        #print(line)
+        _, address = line.rstrip().split(':', 1)
+
+print(address)
+sort_contract = w3.eth.contract(
+    address=address,
+    abi=contract_interface['abi']
+)
 
 
-i=0
+def registerUser(userid, username):
+    tx_hash = sort_contract.functions.registerUser(userid, username).transact(
+        {'txType':"0x3", 'from':w3.eth.accounts[0], 'gas':2409638}
+    )
+    return tx_hash
 
-while i < 1:
-    with open(os.environ['HOME']+'/HW3/contractAddressList') as fp:
-        for line in fp:
-            #print(line)
-            a,b = line.rstrip().split(':', 1)
-            if a=="empty":  
-                tx_hash3 = sendEmptyLoopTransaction(b) 
-            time.sleep(0.01)
+def createAcc(id1, id2, amt):
+    tx_hash = sort_contract.functions.createAcc(id1, id2, amt).transact(
+        {'txType':"0x3", 'from':w3.eth.accounts[0], 'gas':2409638}
+    )
+    return tx_hash
 
-    print("inside loop")
+def sendAmount(id1, id2):
+    tx_hash = sort_contract.functions.sendAmount(id1, id2).transact(
+        {'txType':"0x3", 'from':w3.eth.accounts[0], 'gas':2409638}
+    )
+    return tx_hash
 
-    i=i+1
+def closeAccount(id1, id2):
+    tx_hash = sort_contract.functions.closeAccount(id1, id2).transact(
+        {'txType':"0x3", 'from':w3.eth.accounts[0], 'gas':2409638}
+    )
+    return tx_hash
 
-time.sleep(50)
+def getBalances(id1):
+    tx_hash = sort_contract.functions.closeAccount(id1, id2).transact(
+        {'txType':"0x3", 'from':w3.eth.accounts[0], 'gas':2409638}
+    )
+    return tx_hash
+
+
+
+def generate_valid_graph(num=100):
+    """Keeps generating random graph until a valid graph is generated.
+    Valid => One single component; all nodes reachable.
+    """
+
+
+    def barabasi_albert(n, m):
+        """
+        Generate a graph with power-law degree distribution.
+        Uses the Preferential Attachment algo (Albert & Barabasi, 1999)
+        Code modified from SO:
+        https://stackoverflow.com/a/59055822/6352364
+        """
+
+        def random_subset_with_weights(weights, m):
+            mapped_weights = [(random.expovariate(w), i) for i, w in enumerate(weights)]
+            return {i for _, i in sorted(mapped_weights)[:m]}
+
+        # Initialise with a complete graph on m vertices.
+        neighbours = [set(range(m)) - {i} for i in range(m)]
+        degrees = [m - 1 for i in range(m)]
+
+        for i in range(m, n):
+            n_neighbours = random_subset_with_weights(degrees, m)
+
+            # add node with back-edges
+            neighbours.append(n_neighbours)
+            degrees.append(m)
+
+            # add forward-edges
+            for j in n_neighbours:
+                neighbours[j].add(i)
+                degrees[j] += 1
+
+        return neighbours
+
+    def generate_random_graph(num=num):
+        """Generates a random graph."""
+        return dict(enumerate(barabasi_albert(num, 2)))
+
+    return generate_random_graph(num)
+
+NUM_PEERS = 100
+NUM_TRX = 1000
 
 w3.miner.start(1)
 
+g = generate_valid_graph(NUM_PEERS)
 
-receipt3 = w3.eth.getTransactionReceipt(tx_hash3)
+for i in range(NUM_PEERS):
+    tx = registerUser(i, str(i))
+    receipt = None
+    while receipt is None:
+        receipt = w3.eth.getTransactionReceipt(tx)
+        time.sleep(1)
+    print("Registered", i, receipt)
 
-while ((receipt3 is None)) : 
-    time.sleep(1)
+pprint(g)
 
-    receipt3 = w3.eth.getTransactionReceipt(tx_hash3)
-    # break
+for i, neighs in g.items():
+    for j in neighs:
+        contri = np.random.exponential(10)
+        tx = createAcc(i, j, ceil(ceil(contri)/2))
+        receipt = None
+        while receipt is None:
+            receipt = w3.eth.getTransactionReceipt(tx)
+            time.sleep(1)
+        print("Account Created", i, j, ceil(ceil(contri)/2), receipt)
 
-
-receipt3 = w3.eth.getTransactionReceipt(tx_hash3)
-
-if receipt3 is not None:
-    print("empty:{0}".format(receipt3['gasUsed']))
+for i in range(NUM_TRX):
+    source, dest = None, None
+    while source == dest:
+        source = random.randint(0, NUM_PEERS - 1)
+        dest = random.randint(0, NUM_PEERS - 1)
+    tx = sendAmount(source, dest)
+    receipt = None
+    while receipt is None:
+        receipt = w3.eth.getTransactionReceipt(tx)
+        time.sleep(1)
+    print("Amt sending attempted", source, dest, receipt)
 
 w3.miner.stop()
