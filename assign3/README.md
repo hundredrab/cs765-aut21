@@ -12,19 +12,19 @@ Also install the latest version of solc:
 
 2. Run the following command and copy the address to the genesis.json in the alloc section that adds the balance to the geth account.
 
-geth --datadir test-eth1/ --password password.txt account new
+    `geth --datadir test-eth1/ --password password.txt account new`
 
 
 3. Run the following command to set up the Ethereum node.
 
-sh runEthereumNode.sh
+    `sh runEthereumNode.sh`
 
 
 4. Run the following command, which will deploy the smart contract and copy the smart contract address to contractAddressList
 
-python3 deployContract.py > contractAddressList
+    `python3 deployContract.py > contractAddressList`
 
 
 5. Run the following command to send the transaction
 
-python3 sendTransaction.py
+    `python3 sendTransaction.py`
